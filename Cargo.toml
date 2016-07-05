@@ -1,0 +1,8 @@
+[package]
+name = "ca"
+version = "0.1.0"
+authors = ["obtroston <obtroston@gmail.com>"]
+
+[dependencies]
+sdl2 = "0.20"
+rand = "0.3.14"
