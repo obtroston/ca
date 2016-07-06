@@ -2,6 +2,8 @@ extern crate sdl2;
 
 extern crate ca;
 
+use std::env;
+
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -9,6 +11,40 @@ use sdl2::rect::Rect;
 use sdl2::render::Renderer;
 
 mod flags;
+
+const USAGE: &'static str = "
+ca TYPE INIT WIDTHxHEIGHT CELL_WIDTH [DELAY]
+
+TYPE:
+cyclic NEIGHBORHOOD THRESHOLD STATES
+life SURVIVE_COUNTS BIRTH_COUNTS
+
+cyclic stands for cyclic celular automata.
+life stands for Conway's Game of Life-like automata.
+
+NEIGHBORHOOD: mR for Moore of range R, nR for Von Neumann of range R.
+THRESHOLD: count of next state neighbors necessary to switch to next state.
+STATES: count of states.
+SURVIVE_COUNTS, BIRTH_COUNTS: comma-separated lists of live cells counts
+needed for survival/birth.
+
+INIT:
+random INIT_STATES
+points INIT_POINTS
+INIT_STATES: comma-separated list of states. Every cell will be randomely
+filled with one of these states. If some value is present in list more than
+one time, it will increase probability of filling cell with this value.
+Instead of writing value V N times you can write V*N.
+'default' means uniform distribution of all possible states.
+INIT_POINTS: semicolon-separated list of coordinates of initially filled cells
+in form x,y.
+
+WIDTH, HEIGHT, DELAY: unsigned 32-bit integers.
+WIDTH, HEIGHT: screen dimensions.
+CELL_WIDTH: width of cell.
+Following must hold: WIDTH%CELL_WIDTH == HEIGHT%CELL_WIDTH == 0.
+DELAY: delay in milliseconds after each tick, defaults to 0.
+";
 
 fn draw_automaton(automaton: &ca::CA2, renderer: &mut Renderer, cwidth: u32,
                   palette: &Vec<Color>) {
@@ -24,15 +60,11 @@ fn draw_automaton(automaton: &ca::CA2, renderer: &mut Renderer, cwidth: u32,
     renderer.present();
 }
 
-pub fn main() {
-    const WIDTH: u32 = 1280;
-    const HEIGHT: u32 = 720;
-    const CWIDTH: u32 = 4;
-    const AWIDTH: usize = (WIDTH / CWIDTH) as usize;
-    const AHEIGHT: usize = (HEIGHT / CWIDTH) as usize;
-    const DELAY: u32 = 0;
+fn execute(options: flags::Options) {
+    let automaton_width = (options.width / options.cell_width) as usize;
+    let automaton_height = (options.height / options.cell_width) as usize;
 
-    let octopalette = vec![
+    let palette = vec![
         Color::RGB(0, 0, 0),
         Color::RGB(200, 200, 0),
 	    Color::RGB(0, 153, 255),
@@ -53,24 +85,29 @@ pub fn main() {
 	    Color::RGB(73, 0, 255),
     ];
 
+    let cells = match options.init_type {
+        flags::InitType::Random(states) =>
+            ca::gen::random_area(automaton_width, automaton_height, states),
+        flags::InitType::Points(coords) =>
+            ca::gen::area_with_points(automaton_width, automaton_height, coords),
+    };
+
+    let mut automaton = match options.automaton_type {
+        flags::AutomatonType::Cyclic(nbh, threshold, states) =>
+            ca::CA2::new_cyclic(cells, nbh, threshold, states),
+        flags::AutomatonType::Life(survive, birth) =>
+            ca::CA2::new_life(cells, survive, birth),
+    };
+
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let mut timer_subsystem = sdl_context.timer().unwrap();
-    let window = video_subsystem.window("test", WIDTH, HEIGHT)
+    let window = video_subsystem.window("CA", options.width, options.height)
         .position_centered()
         .opengl()
         .build()
         .unwrap();
     let mut renderer = window.renderer().build().unwrap();
-
-//    let cells = ca::gen::random_area(AWIDTH, AHEIGHT, vec![0,0,0,1]);
-//    let mut automaton = ca::CA2::new_life(cells, vec![4,5,6,7,8], vec![3]);
-//    let cells = ca::gen::random_area(AWIDTH, AHEIGHT, vec![0,1,2,3,4,5,]);
-//    let mut automaton = ca::CA2::new_cyclic(
-//        cells, ca::nb::Neighborhood::VonNeumann(2), 2, 6
-//    );
-//    let cells = ca::gen::area_with_points(AWIDTH, AHEIGHT, vec![(AWIDTH/2, AHEIGHT/2)]);
-//    let mut automaton = ca::CA2::new_life(cells, vec![1], vec![1]);
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -83,8 +120,17 @@ pub fn main() {
                 _ => {}
             }
         }
-        draw_automaton(&automaton, &mut renderer, CWIDTH, &octopalette);
+        draw_automaton(&automaton, &mut renderer, options.cell_width, &palette);
         automaton.tick();
-        timer_subsystem.delay(DELAY);
+        timer_subsystem.delay(options.delay);
+    }
+}
+
+pub fn main() {
+    match flags::parse_args(env::args().collect()) {
+        Ok(options) => execute(options),
+        Err(msg) => {
+            print!("{}\n{}", msg, USAGE);
+        },
     }
 }

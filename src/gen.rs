@@ -16,10 +16,10 @@ pub fn random_area(w: usize, h: usize, states: Vec<Cell>) -> Vec<Vec<Cell>> {
 }
 
 pub fn area_with_points(w: usize, h: usize,
-                        dots: Vec<(usize, usize)>) -> Vec<Vec<Cell>> {
+                        coords: Vec<(usize, usize)>) -> Vec<Vec<Cell>> {
     let mut cells: Vec<Vec<Cell>> = vec![vec![0; w]; h];
-    for point in dots {
-        let (x, y) = point;
+    for coord in coords {
+        let (x, y) = coord;
         cells[y][x] = 1;
     }
     cells

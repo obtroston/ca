@@ -1,6 +1,6 @@
 pub mod gen;
 pub mod nb;
-mod types;
+pub mod types;
 
 use types::Cell;
 
