@@ -1,8 +1,8 @@
-extern crate rand;
+pub mod gen;
+pub mod nb;
+mod types;
 
-use rand::Rng;
-
-pub type Cell = u32;
+use types::Cell;
 
 // (cells, width, index) -> new_state
 pub type CA1Rule = Fn(&Vec<Cell>, usize, usize) -> Cell;
@@ -54,99 +54,13 @@ impl CA1 {
     }
 }
 
-pub enum Neighborhood {
-    Moore(u32),
-    VonNeumann(u32),
-}
-
-fn wrap_idx(idx: i64, limit: usize) -> i64 {
-    let limit = limit as i64;
-    let idx = idx % limit;
-    if idx < 0 { idx + limit } else { idx }
-}
-
-#[test]
-fn test_wrap_idx() {
-    assert_eq!(wrap_idx(-3, 10), 7);
-    assert_eq!(wrap_idx(3, 10), 3);
-    assert_eq!(wrap_idx(13, 10), 3);
-}
-
-struct MooreNeighborhoodIterator<'a> {
-    cells: &'a Vec<Vec<Cell>>,
-    width: usize,
-    height: usize,
-    row: i64,
-    col: i64,
-    nbrow: i64,
-    nbcol: i64,
-    lastrow: i64,
-    lastcol: i64,
-    startcol: i64,
-    finished: bool,
-}
-
-impl<'a> MooreNeighborhoodIterator<'a> {
-    fn new(cells: &'a Vec<Vec<Cell>>, width: usize, height: usize,
-           row: usize, col: usize, range: u32) -> MooreNeighborhoodIterator {
-        let row_sgn = row as i64;
-        let col_sgn = col as i64;
-        let range_sgn = range as i64;
-        let nbrow = row_sgn - range_sgn;
-        let nbcol = col_sgn - range_sgn;
-        let lastrow = row_sgn + range_sgn;
-        let lastcol = col_sgn + range_sgn;
-        MooreNeighborhoodIterator{
-            cells: cells, width: width, height: height,
-            row: row_sgn, col: col_sgn, nbrow: nbrow, nbcol: nbcol,
-            lastrow: lastrow, lastcol: lastcol, startcol: nbcol,
-            finished: false,
-        }
-    }
-
-    fn advance(&mut self) {
-        if self.nbcol < self.lastcol {
-            self.nbcol += 1;
-        } else if self.nbrow < self.lastrow {
-            self.nbrow += 1;
-            self.nbcol = self.startcol;
-        } else {
-            self.finished = true;
-        }
-    }
-}
-
-impl<'a> Iterator for MooreNeighborhoodIterator<'a> {
-    type Item = Cell;
-
-    fn next(&mut self) -> Option<Cell> {
-        if self.finished { return None };
-        let row = wrap_idx(self.nbrow, self.height) as usize;
-        let col = wrap_idx(self.nbcol, self.width) as usize;
-        let result = self.cells[row][col];
-        self.advance();
-        if self.nbrow == (self.row as i64) && self.nbcol == (self.col as i64) {
-            self.advance();
-        }
-        Some(result)
-    }
-}
-
-#[test]
-fn test_moore_neighborhood_iterator() {
-    let cells = get_area_with_points(3, 3, vec![(0,0), (1,1), (2,2)]);
-    let mut it = MooreNeighborhoodIterator::new(&cells, 3, 3, 1, 1, 1);
-    let neighbors: Vec<Cell> = it.collect();
-    assert_eq!(neighbors, vec![1, 0, 0, 0, 0, 0, 0, 1]);
-}
-
 // (cells, width, height, row, col) -> new_state
 pub type CA2Rule = Fn(&Vec<Vec<Cell>>, usize, usize, usize, usize) -> Cell;
 
 pub fn get_life_rule(survive: Vec<Cell>, birth: Vec<Cell>) -> Box<CA2Rule> {
     Box::new(move |cells, w, h, row, col| {
         let mut live = 0;
-        for nb in MooreNeighborhoodIterator::new(cells, w, h, row, col, 1) {
+        for nb in nb::MooreNeighborhoodIterator::new(cells, w, h, row, col, 1) {
             if nb == 1 {
                 live += 1;
             }
@@ -158,16 +72,32 @@ pub fn get_life_rule(survive: Vec<Cell>, birth: Vec<Cell>) -> Box<CA2Rule> {
     })
 }
 
-pub fn get_cyclic_rule(range: u32, threshold: u8, states: u32) -> Box<CA2Rule> {
+pub fn get_cyclic_rule(nbh: nb::Neighborhood, threshold: u8,
+                       states: u32) -> Box<CA2Rule> {
     Box::new(move |cells, w, h, row, col| {
         let cell = cells[row][col];
         let next = (cell+1) % states;
         let mut cnt_next = 0;
-        for nb in MooreNeighborhoodIterator::new(cells, w, h, row, col, range) {
-            if nb == next {
-                cnt_next += 1;
-            }
-        }
+        match nbh {
+            nb::Neighborhood::Moore(range) => {
+                let it = nb::MooreNeighborhoodIterator::new(cells, w, h,
+                                                            row, col, range);
+                for nb in it {
+                    if nb == next {
+                        cnt_next += 1;
+                    }
+                }
+            },
+            nb::Neighborhood::VonNeumann(range) => {
+                let it = nb::VonNeumannNeighborhoodIterator::new(cells, w, h,
+                                                                 row, col, range);
+                for nb in it {
+                    if nb == next {
+                        cnt_next += 1;
+                    }
+                }
+            },
+        };
         if cnt_next >= threshold { next } else { cell }
     })
 }
@@ -194,9 +124,9 @@ impl CA2 {
         CA2::new(cells, rule)
     }
 
-    pub fn new_cyclic(cells: Vec<Vec<Cell>>, range: u32, threshold: u8,
-                      states: u32) -> CA2 {
-        let rule = get_cyclic_rule(range, threshold, states);
+    pub fn new_cyclic(cells: Vec<Vec<Cell>>, nbh: nb::Neighborhood,
+                      threshold: u8, states: u32) -> CA2 {
+        let rule = get_cyclic_rule(nbh, threshold, states);
         CA2::new(cells, rule)
     }
 
@@ -212,25 +142,4 @@ impl CA2 {
             self.cells[row].copy_from_slice(&self.future[row]);
         }
     }
-}
-
-pub fn get_random_area(w: usize, h: usize, states: Vec<Cell>) -> Vec<Vec<Cell>> {
-    let mut rng = rand::thread_rng();
-    let mut cells: Vec<Vec<Cell>> = vec![vec![0; w]; h];
-    for row in 0..h {
-        for col in 0..w {
-            cells[row][col] = *rng.choose(&states).unwrap();
-        }
-    }
-    cells
-}
-
-pub fn get_area_with_points(w: usize, h: usize,
-                            dots: Vec<(usize, usize)>) -> Vec<Vec<Cell>> {
-    let mut cells: Vec<Vec<Cell>> = vec![vec![0; w]; h];
-    for point in dots {
-        let (x, y) = point;
-        cells[y][x] = 1;
-    }
-    cells
 }

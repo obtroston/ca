@@ -8,21 +8,10 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Renderer;
 
+mod flags;
+
 fn draw_automaton(automaton: &ca::CA2, renderer: &mut Renderer, cwidth: u32,
                   palette: &Vec<Color>) {
-//    for (state, color) in palette.iter().enumerate() {
-//        renderer.set_draw_color(*color);
-//        for row in 0..automaton.h {
-//            for col in 0..automaton.w {
-//                if automaton.cells[row][col] == (state as u32) {
-//                    let x = (col as u32)*cwidth;
-//                    let y = (row as u32)*cwidth;
-//                    renderer.fill_rect(Rect::new(x as i32, y as i32, cwidth, cwidth))
-//                        .unwrap();
-//                }
-//            }
-//        }
-//    }
     for row in 0..automaton.h {
         for col in 0..automaton.w {
             renderer.set_draw_color(palette[automaton.cells[row][col] as usize]);
@@ -41,11 +30,8 @@ pub fn main() {
     const CWIDTH: u32 = 4;
     const AWIDTH: usize = (WIDTH / CWIDTH) as usize;
     const AHEIGHT: usize = (HEIGHT / CWIDTH) as usize;
+    const DELAY: u32 = 0;
 
-    let binary_palette = vec![
-        Color::RGB(0, 0, 0),
-        Color::RGB(200, 200, 0)
-    ];
     let octopalette = vec![
         Color::RGB(0, 0, 0),
         Color::RGB(200, 200, 0),
@@ -77,11 +63,13 @@ pub fn main() {
         .unwrap();
     let mut renderer = window.renderer().build().unwrap();
 
-//    let cells = ca::get_random_area(AWIDTH, AHEIGHT, vec![0,0,0,1]);
+//    let cells = ca::gen::random_area(AWIDTH, AHEIGHT, vec![0,0,0,1]);
 //    let mut automaton = ca::CA2::new_life(cells, vec![4,5,6,7,8], vec![3]);
-    let cells = ca::get_random_area(AWIDTH, AHEIGHT, vec![0,1,2,3,4,5,6,7,]);
-    let mut automaton = ca::CA2::new_cyclic(cells, 2, 5, 8);
-//    let cells = ca::get_area_with_points(AWIDTH, AHEIGHT, vec![(AWIDTH/2, AHEIGHT/2)]);
+//    let cells = ca::gen::random_area(AWIDTH, AHEIGHT, vec![0,1,2,3,4,5,]);
+//    let mut automaton = ca::CA2::new_cyclic(
+//        cells, ca::nb::Neighborhood::VonNeumann(2), 2, 6
+//    );
+//    let cells = ca::gen::area_with_points(AWIDTH, AHEIGHT, vec![(AWIDTH/2, AHEIGHT/2)]);
 //    let mut automaton = ca::CA2::new_life(cells, vec![1], vec![1]);
 
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -97,6 +85,6 @@ pub fn main() {
         }
         draw_automaton(&automaton, &mut renderer, CWIDTH, &octopalette);
         automaton.tick();
-        timer_subsystem.delay(5);
+        timer_subsystem.delay(DELAY);
     }
 }
