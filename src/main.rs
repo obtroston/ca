@@ -31,10 +31,10 @@ needed for survival/birth. 'empty' stands for empty list.
 INIT:
 random [INIT_STATES]
 points INIT_POINTS
-INIT_STATES: comma-separated list of states. Every cell will be randomely
-filled with one of these states. If some value is present in list more than
-one time, it will increase probability of filling cell with this value.
-Instead of writing value V N times you can write V*N. Omitted value or
+INIT_STATES: comma-separated list of states or string 'default'. Every cell
+will be randomely filled with one of these states. If some value is present in
+list more than one time, it will increase probability of filling cell with this
+value. Instead of writing value V N times you can write V*N. Omitted value or
 'default' stands for uniform distribution of all possible states.
 INIT_POINTS: semicolon-separated list of coordinates of initially filled cells
 in form x,y.
