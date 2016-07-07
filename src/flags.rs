@@ -148,7 +148,8 @@ fn parse_init_random(
     args: &Vec<String>, idx: usize, automaton_type: &AutomatonType
 ) -> Result<(InitType, usize), &'static str> {
     if args.len() <= idx ||
-       args[idx].find(|c: char| !c.is_digit(10) && c != ',' && c != '*').is_some() {
+       args[idx].find(|c: char| !c.is_digit(10) && c != ',' && c != '*').is_some() ||
+       args[idx] == "default" {
         return Ok((
             InitType::Random(
                 match *automaton_type {
@@ -156,7 +157,7 @@ fn parse_init_random(
                    AutomatonType::Life(..) => { vec![0, 1] },
                 }
             ),
-            idx,
+            if args.len() > idx && args[idx] == "default" { idx+1 } else { idx },
         ))
     }
     let mut states = Vec::new();
