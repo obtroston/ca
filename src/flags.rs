@@ -15,9 +15,8 @@ pub enum InitType {
 pub struct Options {
     pub automaton_type: AutomatonType,
     pub init_type: InitType,
-    pub width: u32,
-    pub height: u32,
-    pub cell_width: u32,
+    pub size: Option<(u32, u32)>,
+    pub cell_width: Option<u32>,
     pub delay: u32,
 }
 
@@ -81,7 +80,10 @@ fn parse_cyclic_automaton(args: &Vec<String>,
 fn parse_u32_csv(args: &Vec<String>,
                  idx: usize) -> Result<(Vec<u32>, usize), ()> {
     if args.len() <= idx {
-        return Err(())
+        return Err(());
+    }
+    if args[idx] == "empty" {
+        return Ok((Vec::new(), idx+1));
     }
     let mut ints: Vec<u32> = Vec::new();
     for s in args[idx].split(",") {
@@ -145,32 +147,26 @@ fn parse_init_state(part: &str) -> Result<(u32, u32), ()> {
 fn parse_init_random(
     args: &Vec<String>, idx: usize, automaton_type: &AutomatonType
 ) -> Result<(InitType, usize), &'static str> {
-    if args.len() <= idx {
-        return Err("INIT_STATES is not set!");
-    }
-    let states: Vec<u32> = try!(match &*args[idx] {
-        "default" => {
-            match *automaton_type {
-                AutomatonType::Cyclic(_, _, states) => {
-                    Ok((0..states).collect())
-                },
-                AutomatonType::Life(..) => {
-                    Ok(vec![0, 1])
-                },
-            }
-        },
-        s => {
-            let mut states: Vec<u32> = Vec::new();
-            for part in s.split(',') {
-                let (state, count) = try!(parse_init_state(part)
-                                          .map_err(|_| "Invalid INIT_STATES value!"));
-                for _ in 0..count {
-                    states.push(state);
+    if args.len() <= idx ||
+       args[idx].find(|c: char| !c.is_digit(10) && c != ',' && c != '*').is_some() {
+        return Ok((
+            InitType::Random(
+                match *automaton_type {
+                   AutomatonType::Cyclic(_, _, states) => { (0..states).collect() },
+                   AutomatonType::Life(..) => { vec![0, 1] },
                 }
-            }
-            Ok(states)
-        },
-    });
+            ),
+            idx,
+        ))
+    }
+    let mut states = Vec::new();
+    for part in args[idx].split(',') {
+        let (state, count) = try!(parse_init_state(part)
+                                  .map_err(|_| "Invalid INIT_STATES value!"));
+        for _ in 0..count {
+            states.push(state);
+        }
+    }
     Ok((InitType::Random(states), idx+1))
 }
 
@@ -206,18 +202,48 @@ fn parse_init_type(
     }
 }
 
+fn parse_size(args: &Vec<String>,
+              idx: usize) -> Result<(Option<(u32, u32)>, usize), &'static str> {
+    if args.len() <= idx {
+        return Ok((None, idx))
+    }
+    let xpos = try!(args[idx].find('x')
+                    .ok_or("Size must me specified as WIDTHxHEIGHT!"));
+    let w = try!(args[idx][..xpos].parse::<u32>().map_err(|_| "Invalid width!"));
+    let h = try!(args[idx][xpos+1..].parse::<u32>().map_err(|_| "Invalid height!"));
+    Ok((Some((w, h)), idx+1))
+}
+
 fn parse_sdl_params(
-    args: &Vec<String>, idx: usize
-) -> Result<(u32, u32, u32, u32), &'static str> {
-    Ok((1920, 1080, 4, 5))
+    args: &Vec<String>, mut idx: usize
+) -> Result<(Option<(u32, u32)>, Option<u32>, u32, usize), &'static str> {
+    let mut cell_width: Option<u32> = None;
+    let mut delay = 5;
+    let (size, _idx) = try!(parse_size(args, idx));
+    idx = _idx;
+    if args.len() > idx {
+        let (_cell_width, _idx) = try!(parse_u32(args, idx)
+                                       .map_err(|_| "Invalid CELL_WIDTH value!"));
+        cell_width = Some(_cell_width);
+        idx = _idx;
+    }
+    if args.len() > idx {
+        let (_delay, _idx) = try!(parse_u32(args, idx)
+                                  .map_err(|_| "Invalid DELAY value!"));
+        delay = _delay;
+        idx = _idx;
+    }
+    Ok((size, cell_width, delay, idx))
 }
 
 pub fn parse_args(args: Vec<String>) -> Result<Options, &'static str> {
     let idx: usize = 1;
     let (automaton_type, idx) = try!(parse_automaton_type(&args, idx));
     let (init_type, idx) = try!(parse_init_type(&args, idx, &automaton_type));
-    let (width, height, cell_width, delay) = try!(parse_sdl_params(&args, idx));
+    let (size, cell_width, delay, idx) = try!(parse_sdl_params(&args, idx));
+    if idx < args.len() {
+        return Err("Trailing args!");
+    }
     Ok(Options{automaton_type: automaton_type, init_type: init_type,
-               width: width, height: height,
-               cell_width: cell_width, delay: delay})
+               size: size, cell_width: cell_width, delay: delay})
 }
