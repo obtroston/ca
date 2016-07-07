@@ -90,7 +90,7 @@ fn get_cell_width(width: u32, height: u32,
     }
 }
 
-fn draw_automaton(automaton: &ca::CA2, renderer: &mut Renderer, cwidth: u32,
+fn draw_ca2(automaton: &ca::CA2, renderer: &mut Renderer, cwidth: u32,
                   palette: &Vec<Color>) {
     for row in 0..automaton.h {
         for col in 0..automaton.w {
@@ -171,7 +171,7 @@ fn execute(options: flags::Options) {
                 _ => {}
             }
         }
-        draw_automaton(&automaton, &mut renderer, cell_width, &palette);
+        draw_ca2(&automaton, &mut renderer, cell_width, &palette);
         automaton.tick();
         timer_subsystem.delay(options.delay);
     }
