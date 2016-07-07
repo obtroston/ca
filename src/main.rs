@@ -75,8 +75,8 @@ fn get_cell_width(width: u32, height: u32,
                   requested_cell_width: Option<u32>) -> Result<u32, &'static str> {
     match requested_cell_width {
         Some(cw) => {
-            if cw%width != 0 || cw%height != 0 {
                 Err("Cell width must me divisor of width and height!")
+            if width%cw != 0 || height%cw != 0 {
             } else {
                 Ok(cw)
             }
