@@ -72,11 +72,14 @@ fn make_window(
 }
 
 fn get_cell_width(width: u32, height: u32,
-                  requested_cell_width: Option<u32>) -> Result<u32, &'static str> {
+                  requested_cell_width: Option<u32>) -> Result<u32, String> {
     match requested_cell_width {
         Some(cw) => {
-                Err("Cell width must me divisor of width and height!")
             if width%cw != 0 || height%cw != 0 {
+                Err(format!(
+                    "Cell width ({}) must me divisor of width ({}) and height ({})!",
+                    cw, width, height
+                ))
             } else {
                 Ok(cw)
             }
