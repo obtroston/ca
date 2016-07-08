@@ -2,14 +2,19 @@ extern crate ca;
 
 use ca::types::Cell;
 
+const ERR_NO_INIT_POINTS: &'static str = "INIT_POINTS is not set!";
+const ERR_INVALID_INIT_POINTS: &'static str = "Invalid INIT_POINTS value!";
+
 pub enum AutomatonType {
+    Elementary(u8), // code
     Cyclic(ca::nb::Neighborhood, u8, u32), // neighborhood, threshold, states
     Life(Vec<Cell>, Vec<Cell>), // survive, birth
 }
 
 pub enum InitType {
     Random(Vec<Cell>), // states
-    Points(Vec<(usize, usize)>), // coordinates
+    Points1D(Vec<usize>), // indexes
+    Points2D(Vec<(usize, usize)>), // coordinates
 }
 
 pub struct Options {
@@ -18,6 +23,26 @@ pub struct Options {
     pub size: Option<(u32, u32)>,
     pub cell_width: Option<u32>,
     pub delay: u32,
+}
+
+fn parse_u32(args: &Vec<String>, idx: usize) -> Result<(u32, usize), ()> {
+    if args.len() <= idx {
+        return Err(());
+    }
+    match args[idx].parse::<u32>() {
+        Ok(val) => Ok((val, idx+1)),
+        Err(_) => Err(()),
+    }
+}
+
+fn parse_elementary_automaton(
+    args: &Vec<String>, idx: usize
+) -> Result<(AutomatonType, usize), &'static str> {
+    let (code, idx) = try!(parse_u32(args, idx).map_err(|_| "Specify rule code!"));
+    if code > 255 {
+        return Err("Rule code must be in range 0-255!");
+    }
+    Ok((AutomatonType::Elementary(code as u8), idx))
 }
 
 fn parse_neighborhood(args: &Vec<String>,
@@ -40,16 +65,6 @@ fn parse_neighborhood(args: &Vec<String>,
             }
         },
         _ => Err("Neighborhood must start with 'm' or 'n'!"),
-    }
-}
-
-fn parse_u32(args: &Vec<String>, idx: usize) -> Result<(u32, usize), ()> {
-    if args.len() <= idx {
-        return Err(());
-    }
-    match args[idx].parse::<u32>() {
-        Ok(val) => Ok((val, idx+1)),
-        Err(_) => Err(()),
     }
 }
 
@@ -118,6 +133,7 @@ fn parse_automaton_type(args: &Vec<String>,
         return Err("Specify automaton type!");
     }
     match &*args[idx] {
+        "elementary" => parse_elementary_automaton(args, idx+1),
         "cyclic" => parse_cyclic_automaton(args, idx+1),
         "life" => parse_life_automaton(args, idx+1),
         _ => Err("Unknown automaton type!"),
@@ -154,7 +170,7 @@ fn parse_init_random(
             InitType::Random(
                 match *automaton_type {
                    AutomatonType::Cyclic(_, _, states) => { (0..states).collect() },
-                   AutomatonType::Life(..) => { vec![0, 1] },
+                   _ => { vec![0, 1] },
                 }
             ),
             if args.len() > idx && args[idx] == "default" { idx+1 } else { idx },
@@ -171,23 +187,43 @@ fn parse_init_random(
     Ok((InitType::Random(states), idx+1))
 }
 
-fn parse_init_points(args: &Vec<String>,
-                     idx: usize) -> Result<(InitType, usize), &'static str> {
+fn parse_points1d(args: &Vec<String>, idx: usize) -> Result<(InitType, usize), ()> {
     if args.len() <= idx {
-        return Err("INIT_POINTS is not set!")
+        return Err(());
     }
-    static ERR_MSG: &'static str = "Invalid INIT_POINTS value!";
+    let (indexes, idx) = try!(parse_u32_csv(args, idx).map_err(|_| ()));
+    let indexes = indexes.iter().map(|x| *x as usize).collect();
+    Ok((InitType::Points1D(indexes), idx))
+}
+
+fn parse_points2d(args: &Vec<String>, idx: usize) -> Result<(InitType, usize), ()> {
+    if args.len() <= idx {
+        return Err(())
+    }
     let mut points: Vec<(usize, usize)> = Vec::new();
     for part in args[idx].split(';') {
-        let points_str: Vec<&str> = part.split(',').collect();
-        if points_str.len() != 2 {
-            return Err(ERR_MSG);
+        let point_str: Vec<&str> = part.split(',').collect();
+        if point_str.len() != 2 {
+            return Err(());
         }
-        let x = try!(points_str[0].parse::<usize>().map_err(|_| ERR_MSG));
-        let y = try!(points_str[1].parse::<usize>().map_err(|_| ERR_MSG));
+        let x = try!(point_str[0].parse::<usize>().map_err(|_| ()));
+        let y = try!(point_str[1].parse::<usize>().map_err(|_| ()));
         points.push((x, y));
     }
-    Ok((InitType::Points(points), idx+1))
+    Ok((InitType::Points2D(points), idx+1))
+}
+
+fn parse_init_points(
+    args: &Vec<String>, idx: usize, automaton_type: &AutomatonType
+) -> Result<(InitType, usize), &'static str> {
+    if args.len() <= idx {
+        return Err(ERR_NO_INIT_POINTS);
+    }
+    let (init_type, idx) = try!((match *automaton_type {
+        AutomatonType::Elementary(..) => parse_points1d(args, idx),
+        _ => parse_points2d(args, idx),
+    }).map_err(|_| ERR_INVALID_INIT_POINTS));
+    Ok((init_type, idx))
 }
 
 fn parse_init_type(
@@ -198,7 +234,7 @@ fn parse_init_type(
     }
     match &*args[idx] {
         "random" => parse_init_random(args, idx+1, automaton_type),
-        "points" => parse_init_points(args, idx+1),
+        "points" => parse_init_points(args, idx+1, automaton_type),
         _ => Err("Unknown initialization type!"),
     }
 }

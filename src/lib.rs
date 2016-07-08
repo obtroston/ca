@@ -11,7 +11,7 @@ pub fn get_elementary_rule(code: u8) -> Box<CA1Rule> {
     Box::new(move |cells, width, idx| {
         let left = if idx <= 0 { cells[width-1] } else { cells[idx-1] };
         let center = cells[idx];
-        let right = if idx >= width { cells[0] } else { cells[idx+1] };
+        let right = if idx >= width-1 { cells[0] } else { cells[idx+1] };
         let code = code as u32;
         match (left, center, right) {
             (0, 0, 0) => code & 1,
