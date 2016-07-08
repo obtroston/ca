@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["obtroston <obtroston@gmail.com>"]
 
 [dependencies]
-sdl2 = "0.20"
+getopts = "0.2.14"
 rand = "0.3.14"
+sdl2 = "0.20"

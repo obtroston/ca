@@ -1,55 +1,73 @@
-extern crate sdl2;
-
-extern crate ca;
-
-mod flags;
-
+use std::error::Error;
 use std::env;
 
+extern crate getopts;
+use getopts::{Options};
+extern crate sdl2;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Renderer;
 
-use flags::{AutomatonType, InitType};
+extern crate ca;
+mod config;
+use config::{CAType, InitType};
 
-const USAGE: &'static str = "
-ca TYPE INIT WIDTHxHEIGHT CELL_WIDTH [DELAY]
-
+static USAGE_TYPE: &'static str = "\
 TYPE:
 elementary CODE
+  Elementary CA.
+  CODE: rule code, 0-255.
+
 cyclic NEIGHBORHOOD THRESHOLD STATES
-life SURVIVE_COUNTS BIRTH_COUNTS
+  Cyclic CA.
+  NEIGHBORHOOD: mR for Moore neighborhood of range R, nR for Von Neumann
+neighborhood of range R.
+  THRESHOLD: count of next state neighbors necessary to switch to next
+state.
+  STATES: count of states.
 
-'elementary' stands for elementary cellular automaton.
-'cyclic' stands for cyclic celular automaton.
-'life' stands for life-like automaton.
+life SURVIVE BIRTH
+  Life-like CA.
+  SURVIVE, BIRTH: comma-separated lists of live cells counts needed for
+survival/birth. 'empty' stands for empty list.";
 
-CODE: code, 0-255.
-NEIGHBORHOOD: mR for Moore of range R, nR for Von Neumann of range R.
-THRESHOLD: count of next state neighbors necessary to switch to next state.
-STATES: count of states.
-SURVIVE_COUNTS, BIRTH_COUNTS: comma-separated lists of live cells counts
-needed for survival/birth. 'empty' stands for empty list.
-
-INIT:
-random [INIT_STATES]
-points INIT_POINTS
-INIT_STATES: comma-separated list of states or string 'default'. Every cell
-will be randomely filled with one of these states. If some value is present in
-list more than one time, it will increase probability of filling cell with this
-value. Instead of writing value V N times you can write V*N. Omitted value or
-'default' stands for uniform distribution of all possible states.
-INIT_POINTS: semicolon-separated list of coordinates of initially filled cells
-in form x,y.
-
-WIDTH, HEIGHT, CELL_WIDTH, DELAY: unsigned 32-bit integers.
-WIDTH, HEIGHT: screen dimensions.
-CELL_WIDTH: width of cell.
-Following must hold: WIDTH%CELL_WIDTH == HEIGHT%CELL_WIDTH == 0.
-DELAY: delay in milliseconds after each tick, defaults to 5.
-";
+fn make_opts() -> Options {
+    let mut opts = Options::new();
+    opts.optopt(
+        "i", "init",
+        "(default: random:uniform) World initialization. 'random' fills cells \
+        with random values. STATES: comma-separated list of states or string \
+        'uniform'. Every cell will be randomely filled with one of these \
+        states. Instead of writing value V N times you can write V*N. \
+        'uniform' stands for uniform distribution of all possible states. \
+        X,Y,WIDTH,HEIGHT: if specified, cells will be filled only in this \
+        rectangle. 'points' fills specified points with value 1 leaving other \
+        contain 0. COORDS: semicolon-separated list of coordinates of \
+        initially filled cells. For 1D CA coordinate must be integer, for 2D \
+        CA coordinate must have form X,Y.",
+        "random:STATES[:X,Y,WIDTH,HEIGHT] or points:COORDS"
+    );
+    opts.optopt(
+        "s", "size",
+        "(default: 2/3 of desktop width and height) Screen size in pixels. \
+        Defaults to 2/3 of current desktop width and height.",
+        "WIDTHxHEIGHT"
+    );
+    opts.optopt(
+        "c", "cell",
+        "(default: maximum divisor of width and height from values 1, 2, 3, \
+        4) Cell size in pixels. Must be divisor of width and height.",
+        "CELL_WIDTH"
+    );
+    opts.optopt(
+        "d", "delay",
+        "(default: 5) Delay after every tick in milliseconds.",
+        "DELAY"
+    );
+    opts
+}
 
 fn make_window(
     video_subsystem: &sdl2::VideoSubsystem, size: Option<(u32, u32)>
@@ -77,9 +95,10 @@ fn make_window(
 }
 
 fn get_cell_width(width: u32, height: u32,
-                  requested_cell_width: Option<u32>) -> Result<u32, String> {
+                  requested_cell_width: Option<u8>) -> Result<u32, String> {
     match requested_cell_width {
         Some(cw) => {
+            let cw = cw as u32;
             if width%cw != 0 || height%cw != 0 {
                 Err(format!(
                     "Cell width ({}) must me divisor of width ({}) and height ({})!",
@@ -193,11 +212,11 @@ fn draw_ca(caview: &Box<CAView>, renderer: &mut Renderer, cwidth: u32) {
     renderer.present();
 }
 
-fn get_ca_view(options: flags::Options, ca_width: usize, ca_height: usize,
+fn get_ca_view(cfg: config::Config, ca_width: usize, ca_height: usize,
                palette: Vec<Color>) -> Box<CAView> {
-    match options.automaton_type {
-        AutomatonType::Elementary(code) => {
-            let cells = match options.init_type {
+    match cfg.ca_type {
+        CAType::Elementary(code) => {
+            let cells = match cfg.init_type {
                 InitType::Random(states) =>
                     ca::gen::random1d(ca_width, states),
                 InitType::Points1D(indexes) =>
@@ -208,17 +227,17 @@ fn get_ca_view(options: flags::Options, ca_width: usize, ca_height: usize,
             Box::new(CA1View::new(ca, palette, ca_height))
         },
         _ => {
-            let cells = match options.init_type {
+            let cells = match cfg.init_type {
                 InitType::Random(states) =>
                     ca::gen::random2d(ca_width, ca_height, states),
                 InitType::Points2D(coords) =>
                     ca::gen::points2d(ca_width, ca_height, coords),
                 _ => unreachable!(),
             };
-            let ca = match options.automaton_type {
-                AutomatonType::Cyclic(nbh, threshold, states) =>
+            let ca = match cfg.ca_type {
+                CAType::Cyclic(nbh, threshold, states) =>
                     ca::CA2::new_cyclic(cells, nbh, threshold, states),
-                AutomatonType::Life(survive, birth) =>
+                CAType::Life(survive, birth) =>
                     ca::CA2::new_life(cells, survive, birth),
                 _ => unreachable!(),
             };
@@ -227,8 +246,8 @@ fn get_ca_view(options: flags::Options, ca_width: usize, ca_height: usize,
     }
 }
 
-fn execute(options: flags::Options) {
-    let palette = vec![
+fn make_palette() -> Vec<Color> {
+    vec![
         Color::RGB(0, 0, 0),
         Color::RGB(200, 200, 0),
 	    Color::RGB(0, 153, 255),
@@ -247,30 +266,38 @@ fn execute(options: flags::Options) {
 	    Color::RGB(255, 0, 102),
 	    Color::RGB(219, 0, 255),
 	    Color::RGB(73, 0, 255),
-    ];
+    ]
+}
 
+fn get_usage(opts: &Options) -> String {
+    let short_usage_prefix = format!("{} TYPE", &env::args().nth(0).unwrap());
+    let usage_prefix = format!("{}\n\n{}", opts.short_usage(&short_usage_prefix),
+                               USAGE_TYPE);
+    opts.usage(&usage_prefix)
+}
+
+fn err_with_usage(err: &str, opts: &Options) -> String {
+    format!("{}\n\n{}", err, get_usage(opts))
+}
+
+fn execute(opts: &Options) -> Result<(), String> {
+    let matches = try!(opts.parse(env::args().skip(1))
+                       .map_err(|fail| err_with_usage(fail.description(), opts)));
+    let cfg = try!(config::Config::from_matches(&matches)
+                   .map_err(|s| err_with_usage(s, opts)));
+    let palette = make_palette();
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
-    let make_window_result = make_window(&video_subsystem, options.size);
-    if make_window_result.is_err() {
-        println!("{}", make_window_result.err().unwrap());
-        return;
-    }
-    let window = make_window_result.unwrap();
+    let window = try!(make_window(&video_subsystem, cfg.size));
     let (width, height) = window.size();
+    let cell_width = try!(get_cell_width(width, height, cfg.cell_width)
+                          .map_err(|s| err_with_usage(&s, opts)));
     let mut timer_subsystem = sdl_context.timer().unwrap();
-    let delay = options.delay;
+    let delay = match cfg.delay { None => 5, Some(d) => d };
     let mut renderer = window.renderer().build().unwrap();
-
-    let get_cell_width_result = get_cell_width(width, height, options.cell_width);
-    if get_cell_width_result.is_err() {
-        println!("{}", get_cell_width_result.unwrap_err());
-        return;
-    }
-    let cell_width = get_cell_width_result.unwrap();
     let ca_width = (width / cell_width) as usize;
     let ca_height = (height / cell_width) as usize;
-    let mut ca_view = get_ca_view(options, ca_width, ca_height, palette);
+    let mut ca_view = get_ca_view(cfg, ca_width, ca_height, palette);
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -287,13 +314,17 @@ fn execute(options: flags::Options) {
         ca_view.tick();
         timer_subsystem.delay(delay);
     }
+    Ok(())
 }
 
 pub fn main() {
-    match flags::parse_args(env::args().collect()) {
-        Ok(options) => execute(options),
-        Err(msg) => {
-            print!("{}\n{}", msg, USAGE);
+    let opts = make_opts();
+    let exit_code = match execute(&opts) {
+        Ok(_) => 0,
+        Err(s) => {
+            println!("{}", s);
+            1
         },
-    }
+    };
+    std::process::exit(exit_code);
 }
