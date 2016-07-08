@@ -4,6 +4,7 @@ use getopts::Matches;
 extern crate ca;
 use ca::types::Cell;
 
+const ERR_INVALID_RANDOM: &'static str = "Invalid 'random' parameters!";
 const ERR_NO_STATES: &'static str = "STATES is not set!";
 const ERR_INVALID_STATES: &'static str = "Invalid STATES value!";
 const ERR_NO_POINTS: &'static str = "POINTS is not set!";
@@ -16,7 +17,9 @@ pub enum CAType {
 }
 
 pub enum InitType {
-    Random(Vec<Cell>), // states
+    Random{states: Vec<Cell>,
+           x1: Option<usize>, x2: Option<usize>,
+           y1: Option<usize>, y2: Option<usize>},
     Points1D(Vec<usize>), // indexes
     Points2D(Vec<(usize, usize)>), // coordinates
 }
@@ -208,28 +211,64 @@ fn parse_init_state(part: &str) -> Result<(u32, u32), ()> {
 }
 
 fn parse_init_random(
-    s: &str, automaton_type: &CAType
+    s: &str, ca_type: &CAType
 ) -> Result<InitType, &'static str> {
-    if s == "" {
-        return Err(ERR_NO_STATES);
-    }
-    if s == "uniform" {
-        return Ok((InitType::Random(
-            match *automaton_type {
-               CAType::Cyclic(_, _, states) => { (0..states).collect() },
-               _ => { vec![0, 1] },
-            }
-        )));
-    }
-    let mut states = Vec::new();
-    for part in s.split(',') {
-        let (state, count) = try!(parse_init_state(part)
-                                  .map_err(|_| ERR_INVALID_STATES));
-        for _ in 0..count {
-            states.push(state);
+    if s == "" { return Err(ERR_NO_STATES); }
+    let parts: Vec<&str> = s.split(':').collect();
+    if parts.len() > 2 { return Err(ERR_INVALID_RANDOM); }
+
+    let states = if parts[0] == "uniform" {
+        match *ca_type {
+            CAType::Cyclic(_, _, states) => { (0..states).collect() },
+            _ => { vec![0, 1] },
         }
+    } else {
+        let mut states = Vec::new();
+        for part in s.split(',') {
+            let (state, count) = try!(parse_init_state(part)
+                                      .map_err(|_| ERR_INVALID_STATES));
+            for _ in 0..count {
+                states.push(state);
+            }
+        }
+        states
+    };
+
+    let (x1, x2, y1, y2) = if parts.len() == 1 {
+        (None, None, None, None)
+    } else {
+        let parts: Vec<&str> = parts[1].split(',').collect();
+        let x1 = Some(try!(parts[0].parse::<usize>()
+                                   .map_err(|_| "random: invalid X1 value!")));
+        let x2 = if parts.len() < 2 {
+            None
+        } else {
+            Some(try!(parts[1].parse::<usize>()
+                              .map_err(|_| "random: invalid X2 value!")))
+        };
+        let y1 = if parts.len() < 3 {
+            None
+        } else {
+            Some(try!(parts[2].parse::<usize>()
+                              .map_err(|_| "random: invalid Y1 value!")))
+        };
+        let y2 = if parts.len() < 4 {
+            None
+        } else {
+            Some(try!(parts[3].parse::<usize>()
+                              .map_err(|_| "random: invalid Y2 value!")))
+        };
+        (x1, x2, y1, y2)
+    };
+
+    match *ca_type {
+        CAType::Elementary(..) if y1.is_some() || y2.is_some() => {
+            return Err("random: Y1 and Y2 values are disabled for 1D CA!");
+        },
+        _ => (),
     }
-    Ok(InitType::Random(states))
+
+    Ok(InitType::Random{states: states, x1: x1, x2: x2, y1: y1, y2: y2})
 }
 
 fn parse_points1d(s: &str) -> Result<InitType, ()> {

@@ -42,12 +42,13 @@ fn make_opts() -> Options {
         'uniform'. Every cell will be randomely filled with one of these \
         states. Instead of writing value V N times you can write V*N. \
         'uniform' stands for uniform distribution of all possible states. \
-        X,Y,WIDTH,HEIGHT: if specified, cells will be filled only in this \
-        rectangle. 'points' fills specified points with value 1 leaving other \
-        contain 0. COORDS: semicolon-separated list of coordinates of \
-        initially filled cells. For 1D CA coordinate must be integer, for 2D \
-        CA coordinate must have form X,Y.",
-        "random:STATES[:X,Y,WIDTH,HEIGHT] or points:COORDS"
+        X1,X2,Y1,Y2: if specified, cells will be filled only in this \
+        coordinates ranges. For 1D CA values Y1 and Y2 must be omitted. \
+        'points' fills specified points with value 1 leaving other contain 0. \
+        COORDS: semicolon-separated list of coordinates of initially filled \
+        cells. For 1D CA coordinate must be integer, for 2D CA coordinate must \
+        have form X,Y.",
+        "random:STATES[:X1[,X2[,Y1[,Y2]]]] or points:COORDS"
     );
     opts.optopt(
         "s", "size",
@@ -217,8 +218,8 @@ fn get_ca_view(cfg: config::Config, ca_width: usize, ca_height: usize,
     match cfg.ca_type {
         CAType::Elementary(code) => {
             let cells = match cfg.init_type {
-                InitType::Random(states) =>
-                    ca::gen::random1d(ca_width, states),
+                InitType::Random{states, x1, x2, ..} =>
+                    ca::gen::random1d(ca_width, states, x1, x2),
                 InitType::Points1D(indexes) =>
                     ca::gen::points1d(ca_width, indexes),
                 _ => unreachable!(),
@@ -228,8 +229,9 @@ fn get_ca_view(cfg: config::Config, ca_width: usize, ca_height: usize,
         },
         _ => {
             let cells = match cfg.init_type {
-                InitType::Random(states) =>
-                    ca::gen::random2d(ca_width, ca_height, states),
+                InitType::Random{states, x1, x2, y1, y2} =>
+                    ca::gen::random2d(ca_width, ca_height, states,
+                                      x1, x2, y1, y2),
                 InitType::Points2D(coords) =>
                     ca::gen::points2d(ca_width, ca_height, coords),
                 _ => unreachable!(),
