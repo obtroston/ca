@@ -5,7 +5,7 @@ pub enum Neighborhood {
     VonNeumann(u32),
 }
 
-fn wrap_idx(idx: i64, limit: usize) -> i64 {
+pub fn wrap_idx(idx: i64, limit: usize) -> i64 {
     let limit = limit as i64;
     let idx = idx % limit;
     if idx < 0 { idx + limit } else { idx }

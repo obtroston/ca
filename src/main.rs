@@ -16,6 +16,17 @@ use config::{CAType, InitType};
 
 static USAGE_TYPE: &'static str = "\
 TYPE:
+1 RADIUS STATES CODE
+  General 1D CA.
+  RADIUS: radius of neighborhood, positive non-zero number.
+  STATES: count of states, number in range 2-36.
+  STATES.pow(2*RADIUS+1) must fit in usize.
+  CODE: STATES-base STATES.pow(2*RADIUS+1)-digit number. Far-right number
+  sets state of middle cell for neighborhood 0...0, next number to the left
+  sets state of middle cell for neighborhood 0...01, ..., far-left number
+  sets state of middle cell for neighborhood X...X, where X is last digit in
+  base of STATES. Special value 'random' sets random code.
+
 elementary CODE
   Elementary CA.
   CODE: rule code, 0-255.
@@ -213,10 +224,11 @@ fn draw_ca(caview: &Box<CAView>, renderer: &mut Renderer, cwidth: u32) {
     renderer.present();
 }
 
-fn get_ca_view(cfg: config::Config, ca_width: usize, ca_height: usize,
-               palette: Vec<Color>) -> Box<CAView> {
+fn get_ca_view(
+    cfg: config::Config, ca_width: usize, ca_height: usize, palette: Vec<Color>
+) -> Result<Box<CAView>, String> {
     match cfg.ca_type {
-        CAType::Elementary(code) => {
+        CAType::Elementary(..) | CAType::CA1{..} => {
             let cells = match cfg.init_type {
                 InitType::Random{states, x1, x2, ..} =>
                     ca::gen::random1d(ca_width, states, x1, x2),
@@ -224,8 +236,14 @@ fn get_ca_view(cfg: config::Config, ca_width: usize, ca_height: usize,
                     ca::gen::points1d(ca_width, indexes),
                 _ => unreachable!(),
             };
-            let ca = ca::CA1::new_elementary(cells, code);
-            Box::new(CA1View::new(ca, palette, ca_height))
+            let ca = match cfg.ca_type {
+                CAType::Elementary(code) =>
+                    ca::CA1::new_elementary(cells, code),
+                CAType::CA1{radius, states, code} =>
+                    try!(ca::CA1::new_ca1(cells, radius, states, code)),
+                _ => unreachable!(),
+            };
+            Ok(Box::new(CA1View::new(ca, palette, ca_height)))
         },
         _ => {
             let cells = match cfg.init_type {
@@ -243,7 +261,7 @@ fn get_ca_view(cfg: config::Config, ca_width: usize, ca_height: usize,
                     ca::CA2::new_life(cells, survive, birth),
                 _ => unreachable!(),
             };
-            Box::new(CA2View::new(ca, palette))
+            Ok(Box::new(CA2View::new(ca, palette)))
         }
     }
 }
@@ -299,7 +317,7 @@ fn execute(opts: &Options) -> Result<(), String> {
     let mut renderer = window.renderer().build().unwrap();
     let ca_width = (width / cell_width) as usize;
     let ca_height = (height / cell_width) as usize;
-    let mut ca_view = get_ca_view(cfg, ca_width, ca_height, palette);
+    let mut ca_view = try!(get_ca_view(cfg, ca_width, ca_height, palette));
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {

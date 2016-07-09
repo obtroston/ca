@@ -1,3 +1,8 @@
+use std::char;
+
+extern crate rand;
+use rand::distributions::{Range, IndependentSample};
+
 pub mod gen;
 pub mod nb;
 pub mod types;
@@ -7,24 +12,79 @@ use types::Cell;
 // (cells, width, index) -> new_state
 pub type CA1Rule = Fn(&Vec<Cell>, usize, usize) -> Cell;
 
-pub fn get_elementary_rule(code: u8) -> Box<CA1Rule> {
-    Box::new(move |cells, width, idx| {
-        let left = if idx <= 0 { cells[width-1] } else { cells[idx-1] };
-        let center = cells[idx];
-        let right = if idx >= width-1 { cells[0] } else { cells[idx+1] };
-        let code = code as u32;
-        match (left, center, right) {
-            (0, 0, 0) => code & 1,
-            (0, 0, 1) => code >> 1 & 1,
-            (0, 1, 0) => code >> 2 & 1,
-            (0, 1, 1) => code >> 3 & 1,
-            (1, 0, 0) => code >> 4 & 1,
-            (1, 0, 1) => code >> 5 & 1,
-            (1, 1, 0) => code >> 6 & 1,
-            (1, 1, 1) => code >> 7 & 1,
-            _ => panic!("unexpected neighborhood: {} {} {}", left, center, right),
+fn get_random_ca1_code(len: usize, base: usize) -> String {
+    let base = base as u32;
+    let range = Range::new(0, base);
+    let mut rng = rand::thread_rng();
+    let code: String = (0..len).map(
+        |_| char::from_digit(range.ind_sample(&mut rng), base).unwrap()
+    ).collect();
+    code
+}
+
+pub fn get_ca1_rule(
+    radius: u8, states: u8, code: Option<String>
+) -> Result<Box<CA1Rule>, String> {
+    static ERR_ZERO_RADIUS: &'static str =
+        "radius < 1!";
+    static ERR_INVALID_STATES: &'static str =
+        "states not in range 2-36!";
+    static ERR_TOO_BIG_PARAMS: &'static str =
+        "states.pow(radius*2+1) must fit in usize!";
+    static ERR_INVALID_CODE_LEN: &'static str =
+        "code must contain digit for every neighborhood!";
+
+    if radius<1 { return Err(String::from(ERR_ZERO_RADIUS)); }
+    if states<2 || states>36 { return Err(String::from(ERR_INVALID_STATES)); }
+
+    let radius = radius as usize;
+    let nb_width = try!(
+        radius.checked_mul(2)
+                 .ok_or(ERR_TOO_BIG_PARAMS)
+                 .and_then(|x| x.checked_add(1)
+                                .ok_or(ERR_TOO_BIG_PARAMS))
+    );
+
+    let states = states as usize;
+    let mut neighborhoods = states;
+    for _ in 1..nb_width {
+        neighborhoods = try!(
+            neighborhoods.checked_mul(states).ok_or(ERR_TOO_BIG_PARAMS)
+        );
+    }
+    let code = match code {
+        Some(s) => s,
+        None => get_random_ca1_code(neighborhoods, states),
+    };
+    if neighborhoods != code.len() {
+        return Err(String::from(ERR_INVALID_CODE_LEN));
+    }
+    let mut rules: Vec<Cell> = vec![0; neighborhoods];
+    for (i, c) in code.chars().rev().enumerate() {
+        let new_state = try!(
+            c.to_digit(states as u32)
+             .ok_or(format!("{} is not a digit in base {}!", c, states))
+        );
+        rules[i] = new_state;
+    }
+
+    let radius = radius as i64;
+    Ok(Box::new(move |cells, width, idx| {
+        let idx = idx as i64;
+        let idx_begin = idx-radius;
+        let idx_end = idx+radius+1;
+        let mut nb_code: usize = 0;
+        for i in idx_begin..idx_end {
+            let i = nb::wrap_idx(i, width) as usize;
+            let state = cells[i] as usize;
+            nb_code = nb_code*states + state;
         }
-    })
+        rules[nb_code]
+    }))
+}
+
+pub fn get_elementary_rule(code: u8) -> Box<CA1Rule> {
+    get_ca1_rule(1, 2, Some(format!("{:0>8b}", code))).unwrap()
 }
 
 pub struct CA1 {
@@ -39,6 +99,12 @@ impl CA1 {
         let w = cells.len();
         let future = cells.to_vec();
         CA1{w: w, cells: cells, future: future, rule: rule}
+    }
+
+    pub fn new_ca1(cells: Vec<Cell>, radius: u8, states: u8,
+                   code: Option<String>) -> Result<CA1, String> {
+        let rule = try!(get_ca1_rule(radius, states, code));
+        Ok(CA1::new(cells, rule))
     }
 
     pub fn new_elementary(cells: Vec<Cell>, code: u8) -> CA1 {

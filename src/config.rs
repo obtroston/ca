@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 extern crate getopts;
 use getopts::Matches;
 
@@ -11,6 +13,7 @@ const ERR_NO_POINTS: &'static str = "POINTS is not set!";
 const ERR_INVALID_POINTS: &'static str = "Invalid POINTS value!";
 
 pub enum CAType {
+    CA1{radius: u8, states: u8, code: Option<String>},
     Elementary(u8), // code
     Cyclic(ca::nb::Neighborhood, u8, u32), // neighborhood, threshold, states
     Life(Vec<Cell>, Vec<Cell>), // survive, birth
@@ -64,24 +67,44 @@ impl Config {
     }
 }
 
-fn parse_u32(args: &Vec<String>, idx: usize) -> Result<(u32, usize), ()> {
+fn parse<F>(args: &Vec<String>, idx: usize) -> Result<(F, usize), ()>
+    where F: FromStr {
     if args.len() <= idx {
         return Err(());
     }
-    match args[idx].parse::<u32>() {
+    match args[idx].parse::<F>() {
         Ok(val) => Ok((val, idx+1)),
         Err(_) => Err(()),
     }
 }
 
+fn parse_ca1(
+    args: &Vec<String>, idx: usize
+) -> Result<(CAType, usize), &'static str> {
+    let (radius, idx) = try!(
+        parse::<u8>(args, idx)
+        .map_err(|_| "RADIUS must be unsigned 8-bit integer!")
+    );
+    let (states, idx) = try!(
+        parse::<u8>(args, idx)
+        .map_err(|_| "STATES must be unsigned 8-bit integer!")
+    );
+    if args.len() < idx {
+        return Err("Specify CODE value!");
+    }
+    let code = if args[idx] == "random" { None }
+               else { Some(args[idx].clone()) };
+    Ok((CAType::CA1{radius: radius, states: states,
+                    code: code}, idx+1))
+}
+
 fn parse_elementary_ca(
     args: &Vec<String>, idx: usize
 ) -> Result<(CAType, usize), &'static str> {
-    let (code, idx) = try!(parse_u32(args, idx)
-                           .map_err(|_| "Specify rule code!"));
-    if code > 255 {
-        return Err("Rule code must be in range 0-255!");
-    }
+    let (code, idx) = try!(
+        parse::<u8>(args, idx)
+        .map_err(|_| "CODE must be unsigned 8-bit integer!")
+    );
     Ok((CAType::Elementary(code as u8), idx))
 }
 
@@ -113,21 +136,15 @@ fn parse_cyclic_ca(
 ) -> Result<(CAType, usize), &'static str> {
     let (nb, idx) = try!(parse_neighborhood(args, idx));
     let (threshold, idx) = try!(
-        match parse_u32(args, idx) {
-            Ok((val, idx)) => {
-                if val > 255 {
-                    Err("Threshold must be in range 0..255!")
-                } else {
-                    Ok((val as u8, idx))
-                }
-            },
-            Err(_) => Err("Invalid or no threshold value!"),
+        match parse::<u8>(args, idx) {
+            Ok((val, idx)) => Ok((val, idx)),
+            Err(_) => Err("THRESHOLD must be unsigned 8-bit integer!"),
         }
     );
     let (states, idx) = try!(
-        match parse_u32(args, idx) {
+        match parse::<u32>(args, idx) {
             Ok((args, idx)) => Ok((args, idx)),
-            Err(_) => Err("Invalid or no states count!"),
+            Err(_) => Err("STATES must be unsigned 32-bit integer!"),
         }
     );
     Ok((CAType::Cyclic(nb, threshold, states), idx))
@@ -177,6 +194,7 @@ fn parse_ca_type(args: &Vec<String>) -> Result<CAType, &'static str> {
     }
     let (ca_type, idx) = try!(
         match &*args[0] {
+            "1" => parse_ca1(args, 1),
             "elementary" => parse_elementary_ca(args, 1),
             "cyclic" => parse_cyclic_ca(args, 1),
             "life" => parse_life_ca(args, 1),
