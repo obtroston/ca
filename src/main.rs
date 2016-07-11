@@ -224,6 +224,51 @@ fn draw_ca(caview: &Box<CAView>, renderer: &mut Renderer, cwidth: u32) {
     renderer.present();
 }
 
+fn get_abs_coord(
+    origin: usize, shift: i32, limit: usize
+) -> Result<usize, &'static str> {
+    let abs = (origin as i64) + (shift as i64);
+    if abs < 0 || abs >= (limit as i64) {
+        return Err("Relative coordinate outside bounds!");
+    }
+    Ok(abs as usize)
+}
+
+fn points1d_to_coords(
+    points: Vec<config::Point1D>, ca_width: usize
+) -> Result<Vec<usize>, &'static str> {
+    let c = ca_width / 2;
+    let mut coords: Vec<usize> = Vec::new();
+    for p in points {
+        let coord = match p {
+            config::Point1D::Abs(i) => i,
+            config::Point1D::RelToCenter(shift) => {
+                try!(get_abs_coord(c, shift, ca_width))
+            },
+        };
+        coords.push(coord);
+    }
+    Ok(coords)
+}
+
+fn points2d_to_coords(
+    points: Vec<config::Point2D>, ca_width: usize, ca_height: usize
+) -> Result<Vec<(usize, usize)>, &'static str> {
+    let c = (ca_width/2, ca_height/2);
+    let mut coords: Vec<(usize, usize)> = Vec::new();
+    for p in points {
+        let coord = match p {
+            config::Point2D::Abs(x, y) => (x, y),
+            config::Point2D::RelToCenter(x, y) => {(
+                try!(get_abs_coord(c.0, x, ca_width)),
+                try!(get_abs_coord(c.1, y, ca_height)),
+            )},
+        };
+        coords.push(coord);
+    }
+    Ok(coords)
+}
+
 fn get_ca_view(
     cfg: config::Config, ca_width: usize, ca_height: usize, palette: Vec<Color>
 ) -> Result<Box<CAView>, String> {
@@ -232,8 +277,10 @@ fn get_ca_view(
             let cells = match cfg.init_type {
                 InitType::Random{states, x1, x2, ..} =>
                     ca::gen::random1d(ca_width, states, x1, x2),
-                InitType::Points1D(indexes) =>
-                    ca::gen::points1d(ca_width, indexes),
+                InitType::Points1D(points) => {
+                    let coords = try!(points1d_to_coords(points, ca_width));
+                    ca::gen::points1d(ca_width, coords)
+                },
                 _ => unreachable!(),
             };
             let ca = match cfg.ca_type {
@@ -250,8 +297,10 @@ fn get_ca_view(
                 InitType::Random{states, x1, x2, y1, y2} =>
                     ca::gen::random2d(ca_width, ca_height, states,
                                       x1, x2, y1, y2),
-                InitType::Points2D(coords) =>
-                    ca::gen::points2d(ca_width, ca_height, coords),
+                InitType::Points2D(points) => {
+                    let coords = try!(points2d_to_coords(points, ca_width, ca_height));
+                    ca::gen::points2d(ca_width, ca_height, coords)
+                },
                 _ => unreachable!(),
             };
             let ca = match cfg.ca_type {

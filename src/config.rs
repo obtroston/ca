@@ -12,6 +12,16 @@ const ERR_INVALID_STATES: &'static str = "Invalid STATES value!";
 const ERR_NO_POINTS: &'static str = "POINTS is not set!";
 const ERR_INVALID_POINTS: &'static str = "Invalid POINTS value!";
 
+pub enum Point1D {
+    Abs(usize),
+    RelToCenter(i32),
+}
+
+pub enum Point2D {
+    Abs(usize, usize),
+    RelToCenter(i32, i32),
+}
+
 pub enum CAType {
     CA1{radius: u8, states: u8, code: Option<String>},
     Elementary(u8), // code
@@ -23,8 +33,8 @@ pub enum InitType {
     Random{states: Vec<Cell>,
            x1: Option<usize>, x2: Option<usize>,
            y1: Option<usize>, y2: Option<usize>},
-    Points1D(Vec<usize>), // indexes
-    Points2D(Vec<(usize, usize)>), // coordinates
+    Points1D(Vec<Point1D>),
+    Points2D(Vec<Point2D>),
 }
 
 pub struct Config {
@@ -289,22 +299,67 @@ fn parse_init_random(
     Ok(InitType::Random{states: states, x1: x1, x2: x2, y1: y1, y2: y2})
 }
 
+fn is_rel_to_center_head(s: &str) -> (bool, bool) {
+    (s.starts_with("c+"), s.starts_with("c-"))
+}
+
+fn parse_point1d(s: &str) -> Result<Point1D, ()> {
+    if s == "c" {
+        return Ok(Point1D::RelToCenter(0));
+    }
+    let (cplus, cminus) = is_rel_to_center_head(s);
+    if cplus || cminus {
+        let shift = try!(s[2..].parse::<u16>().map_err(|_| ()));
+        Ok(Point1D::RelToCenter(
+            (shift as i32) * (if cplus { 1 } else { -1 })
+        ))
+    } else {
+        let idx = try!(s.parse::<usize>().map_err(|_| ()));
+        Ok(Point1D::Abs(idx))
+    }
+}
+
 fn parse_points1d(s: &str) -> Result<InitType, ()> {
-    let indexes = try!(parse_u32_csv(s, ';'))
-                  .iter().map(|x| *x as usize).collect();
-    Ok(InitType::Points1D(indexes))
+    let mut points: Vec<Point1D> = Vec::new();
+    for part in s.split(';') {
+        let p = try!(parse_point1d(part));
+        points.push(p);
+    }
+    Ok(InitType::Points1D(points))
+}
+
+fn parse_point2d(s: &str) -> Result<Point2D, ()> {
+    if s == "c" {
+        return Ok(Point2D::RelToCenter(0, 0));
+    }
+    let (cplus, cminus) = is_rel_to_center_head(s);
+    if cplus || cminus {
+        let shifts: Vec<&str> = s[2..].split(',').collect();
+        if shifts.len() != 2 {
+            return Err(());
+        }
+        let xshift = try!(shifts[0].parse::<u16>().map_err(|_| ()));
+        let yshift = try!(shifts[1].parse::<u16>().map_err(|_| ()));
+        let sgn: i32 = if cplus { 1 } else { -1 };
+        let xshift = (xshift as i32) * sgn;
+        let yshift = (yshift as i32) * sgn;
+        Ok(Point2D::RelToCenter(xshift, yshift))
+    } else {
+        let coords: Vec<&str> = s.split(',').collect();
+        if coords.len() != 2 {
+            return Err(());
+        }
+        let x = try!(coords[0].parse::<usize>().map_err(|_| ()));
+        let y = try!(coords[1].parse::<usize>().map_err(|_| ()));
+        Ok(Point2D::Abs(x, y))
+    }
 }
 
 fn parse_points2d(s: &str) -> Result<InitType, ()> {
-    let mut points: Vec<(usize, usize)> = Vec::new();
+    let mut points: Vec<Point2D> = Vec::new();
     for part in s.split(';') {
-        let point_str: Vec<&str> = part.split(',').collect();
-        if point_str.len() != 2 {
-            return Err(());
-        }
-        let x = try!(point_str[0].parse::<usize>().map_err(|_| ()));
-        let y = try!(point_str[1].parse::<usize>().map_err(|_| ()));
-        points.push((x, y));
+        let p = try!(parse_point2d(part));
+        points.push(p);
     }
     Ok(InitType::Points2D(points))
 }
