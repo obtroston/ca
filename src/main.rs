@@ -64,7 +64,7 @@ fn make_opts() -> Options {
         coordinate must have form X,Y, where X and Y are integers >= 0. \
         Special value 'c' means center point. Also you can specify \
         coordinates relative to center point in form c+X/c-X for 1D CA and \
-        c+X,Y/c-X,y for 2D CA.",
+        c+X,Y/c-X,Y for 2D CA.",
         "random:STATES[:X1[,X2[,Y1[,Y2]]]] or points:COORDS"
     );
     opts.optopt(
