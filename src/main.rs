@@ -1,17 +1,17 @@
+extern crate getopts;
+extern crate sdl2;
+extern crate ca;
+
+mod config;
+
 use std::error::Error;
 use std::env;
-
-extern crate getopts;
 use getopts::{Options};
-extern crate sdl2;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Renderer;
-
-extern crate ca;
-mod config;
 use config::{CAType, InitType};
 
 static USAGE_TYPE: &'static str = "\
