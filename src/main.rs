@@ -46,6 +46,9 @@ survival/birth. 'empty' stands for empty list.";
 
 fn make_opts() -> Options {
     let mut opts = Options::new();
+    opts.optflag(
+        "h", "help", "Show this help message."
+    );
     opts.optopt(
         "i", "init",
         "(default: random:uniform) World initialization.\n\
@@ -341,29 +344,27 @@ fn make_palette() -> Vec<Color> {
     ]
 }
 
-fn get_usage(opts: &Options) -> String {
+fn print_help(opts: &Options) {
     let short_usage_prefix = format!("{} TYPE", &env::args().nth(0).unwrap());
     let usage_prefix = format!("{}\n\n{}", opts.short_usage(&short_usage_prefix),
                                USAGE_TYPE);
-    opts.usage(&usage_prefix)
-}
-
-fn err_with_usage(err: &str, opts: &Options) -> String {
-    format!("{}\n\n{}", err, get_usage(opts))
+    println!("{}", opts.usage(&usage_prefix))
 }
 
 fn execute(opts: &Options) -> Result<(), String> {
     let matches = try!(opts.parse(env::args().skip(1))
-                       .map_err(|fail| err_with_usage(fail.description(), opts)));
-    let cfg = try!(config::Config::from_matches(&matches)
-                   .map_err(|s| err_with_usage(s, opts)));
+                       .map_err(|fail| String::from(fail.description())));
+    if matches.opt_present("h") {
+        print_help(opts);
+        return Ok(());
+    }
+    let cfg = try!(config::Config::from_matches(&matches));
     let palette = make_palette();
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = try!(make_window(&video_subsystem, cfg.size));
     let (width, height) = window.size();
-    let cell_width = try!(get_cell_width(width, height, cfg.cell_width)
-                          .map_err(|s| err_with_usage(&s, opts)));
+    let cell_width = try!(get_cell_width(width, height, cfg.cell_width));
     let mut timer_subsystem = sdl_context.timer().unwrap();
     let delay = match cfg.delay { None => 5, Some(d) => d };
     let mut renderer = window.renderer().build().unwrap();
@@ -394,7 +395,7 @@ pub fn main() {
     let exit_code = match execute(&opts) {
         Ok(_) => 0,
         Err(s) => {
-            println!("{}", s);
+            println!("{}\nTry -h for more information.", s);
             1
         },
     };
