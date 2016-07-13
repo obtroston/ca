@@ -149,16 +149,16 @@ mod tests {
 
     #[test]
     fn test_moore_neighborhood_iterator() {
-        let cells = gen::area_with_points(3, 3, vec![(0,0), (1,1), (2,2)]);
-        let mut it = MooreNeighborhoodIterator::new(&cells, 3, 3, 1, 1, 1);
+        let cells = gen::points2d(3, 3, vec![(0,0), (1,1), (2,2)]);
+        let it = MooreNeighborhoodIterator::new(&cells, 3, 3, 1, 1, 1);
         let neighbors: Vec<Cell> = it.collect();
         assert_eq!(neighbors, vec![1, 0, 0, 0, 0, 0, 0, 1]);
     }
 
     #[test]
     fn test_von_neumann_neighborhood_iterator() {
-        let cells = gen::area_with_points(3, 3, vec![(0,0), (0,1), (1,0), (1,1), (2,2)]);
-        let mut it = VonNeumannNeighborhoodIterator::new(&cells, 3, 3, 1, 1, 1);
+        let cells = gen::points2d(3, 3, vec![(0,0), (0,1), (1,0), (1,1), (2,2)]);
+        let it = VonNeumannNeighborhoodIterator::new(&cells, 3, 3, 1, 1, 1);
         let neighbors: Vec<Cell> = it.collect();
         assert_eq!(neighbors, vec![1, 1, 0, 0]);
     }
