@@ -50,16 +50,16 @@ fn make_opts() -> Options {
     opts.optopt("i",
                 "init",
                 "(default: random:uniform) World initialization.\n'random' fills cells with \
-                 random values. STATES: comma-separated listof states or string 'uniform'. Every \
-                 cell will be randomely filled with one of these states. Instead of writing \
-                 value V N times you can write V*N. 'uniform' stands for uniform distribution of \
-                 all possible states. X1,X2,Y1,Y2: if specified, cells will be filled only in \
-                 this coordinates ranges. For 1D CA values Y1 and Y2 must be omitted.\n'points' \
-                 fills specified points with value 1 leaving other contain 0. COORDS: \
-                 semicolon-separated list of coordinates of initially filled cells. For 1D CA \
-                 coordinate must be integer >= 0, for 2D CA coordinate must have form X,Y, where \
-                 X and Y are integers >= 0. Special value 'c' means center point. Also you can \
-                 specify coordinates relative to center point in form c+X/c-X for 1D CA and \
+                 random values. STATES: comma-separated list of states or string 'uniform'. \
+                 Every cell will be randomely filled with one of these states. Instead of \
+                 writing value V N times you can write V*N. 'uniform' stands for uniform \
+                 distribution of all possible states. X1,X2,Y1,Y2: if specified, cells will be \
+                 filled only in this coordinates ranges. For 1D CA values Y1 and Y2 must be \
+                 omitted.\n'points' fills specified points with value 1 leaving other contain 0. \
+                 COORDS: semicolon-separated list of coordinates of initially filled cells. For \
+                 1D CA coordinate must be integer >= 0, for 2D CA coordinate must have form X,Y, \
+                 where X and Y are integers >= 0. Special value 'c' means center point. Also you \
+                 can specify coordinates relative to center point in form c+X/c-X for 1D CA and \
                  c+X,Y/c-X,Y for 2D CA.",
                 "random:STATES[:X1[,X2[,Y1[,Y2]]]] or points:COORDS");
     opts.optopt("s",
