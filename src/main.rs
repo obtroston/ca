@@ -21,9 +21,9 @@ TYPE:
   RADIUS: radius of neighborhood, positive non-zero number.
   STATES: count of states, number in range 2-36.
   STATES.pow(2*RADIUS+1) must fit in usize.
-  CODE: STATES-base STATES.pow(2*RADIUS+1)-digit number. Far-right number
-  sets state of middle cell for neighborhood 0...0, next number to the left
-  sets state of middle cell for neighborhood 0...01, ..., far-left number
+  CODE: STATES-base STATES.pow(2*RADIUS+1)-digit number. Far-right digit
+  sets state of middle cell for neighborhood 0...0, next digit to the left
+  sets state of middle cell for neighborhood 0...01, ..., far-left digit
   sets state of middle cell for neighborhood X...X, where X is last digit in
   base of STATES. Special value 'random' sets random code.
 
